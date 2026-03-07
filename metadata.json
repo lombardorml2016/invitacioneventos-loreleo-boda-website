@@ -1,0 +1,5 @@
+{
+  "name": "Lore & Leo - Nuestra Boda",
+  "description": "Una invitación elegante y personalizada para la boda de Lore y Leo, incluyendo detalles del evento, confirmación de asistencia y una nota especial sobre la celebración.",
+  "requestFramePermissions": ["geolocation"]
+}

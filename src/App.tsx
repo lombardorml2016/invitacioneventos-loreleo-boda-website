@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { 
   Heart, 
   Calendar, 
@@ -15,7 +15,12 @@ import {
   Info,
   ChevronDown,
   Camera,
-  GlassWater
+  GlassWater,
+  Volume2,
+  VolumeX,
+  ChevronLeft,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
@@ -26,9 +31,12 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const WEDDING_DATE = new Date('2026-07-18T18:00:00');
+const WEDDING_DATE = new Date('2026-07-11T18:00:00');
 
 export default function App() {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -51,8 +59,41 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
+  const slides = [
+    "https://www.invitacionevento.com/primos/fotos/1.png",
+    "https://www.invitacionevento.com/primos/fotos/2.png",
+    "https://www.invitacionevento.com/primos/fotos/3.png",
+    "https://www.invitacionevento.com/primos/fotos/4.png",
+    "https://www.invitacionevento.com/primos/fotos/5.png",
+    "https://www.invitacionevento.com/primos/fotos/6.png",
+    "https://www.invitacionevento.com/primos/fotos/7.png"
+  ];
+
+  const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % slides.length);
+  const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+
+  const toggleMusic = () => {
+    const audio = document.getElementById('bg-music') as HTMLAudioElement;
+    if (isPlaying) {
+      audio.pause();
+    } else {
+      audio.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
   return (
     <div className="min-h-screen bg-[#fdfcfb] selection:bg-[#e6d5c3] selection:text-[#5a4a3a]">
+      <audio id="bg-music" loop src="https://www.invitacionevento.com/primos/musica.mp3" />
+      
+      {/* Music Toggle Button */}
+      <button 
+        onClick={toggleMusic}
+        className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-white/80 backdrop-blur-sm rounded-full shadow-lg flex items-center justify-center text-[#8a7a6a] hover:scale-110 transition-transform border border-[#f0ebe6]"
+      >
+        {isPlaying ? <Volume2 size={24} /> : <VolumeX size={24} />}
+      </button>
+
       {/* Hero Section */}
       <section className="relative h-screen flex flex-col items-center justify-center overflow-hidden px-4">
         <motion.div 
@@ -62,7 +103,7 @@ export default function App() {
           className="absolute inset-0 z-0"
         >
           <img 
-            src="https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=2000" 
+            src="https://www.invitacionevento.com/primos/portada.png" 
             alt="Wedding background"
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
@@ -96,7 +137,7 @@ export default function App() {
           >
             <div className="h-px w-24 bg-[#c6b5a3] mb-6" />
             <p className="serif text-2xl md:text-3xl text-[#5a4a3a] mb-2 italic">
-              18 de Julio de 2026
+              11 de Julio de 2026
             </p>
             <p className="text-sm uppercase tracking-widest text-[#8a7a6a]">
               Chaco, Argentina
@@ -160,22 +201,13 @@ export default function App() {
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true }}
-            className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl bg-[#f9f7f5] group cursor-pointer"
+            className="relative aspect-video rounded-3xl overflow-hidden shadow-2xl bg-[#f9f7f5]"
           >
-            <img 
-              src="https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=2000" 
-              alt="Video thumbnail"
-              className="w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700"
-              referrerPolicy="no-referrer"
+            <video 
+              src="https://www.invitacionevento.com/primos/primos.mp4" 
+              controls
+              className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-20 h-20 bg-white/90 rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                <div className="w-0 h-0 border-t-[12px] border-t-transparent border-l-[20px] border-l-[#8a7a6a] border-b-[12px] border-b-transparent ml-2" />
-              </div>
-            </div>
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm uppercase tracking-widest font-medium drop-shadow-md">
-              Reproducir Video
-            </div>
           </motion.div>
         </div>
       </section>
@@ -191,18 +223,23 @@ export default function App() {
             <div className="w-16 h-16 bg-[#fdfcfb] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#f0ebe6]">
               <Calendar className="text-[#8a7a6a]" size={24} />
             </div>
-            <h3 className="serif text-3xl mb-4 text-[#4a3a2a]">La Ceremonia</h3>
-            <p className="text-[#6a5a4a] mb-6">
-              Acompáñanos en el momento del "Sí, quiero".
+            <h3 className="serif text-3xl mb-4 text-[#4a3a2a]">Ceremonia</h3>
+            <p className="text-[#6a5a4a] mb-6 leading-relaxed">
+              Ambas ceremonias, Civil y Religiosa, se llevarán a cabo en:
             </p>
-            <div className="space-y-2 mb-8">
-              <p className="font-medium text-[#4a3a2a]">18:00 Horas</p>
-              <p className="text-[#8a7a6a]">Parroquia San Benito Abad</p>
-              <p className="text-sm text-[#8a7a6a]">Villanueva 905, CABA</p>
+            <div className="space-y-1 mb-8">
+              <p className="font-medium text-[#4a3a2a] text-lg">Salon Amudoch</p>
+              <p className="text-[#8a7a6a]">Ruta 11 km 1001</p>
+              <p className="text-[#8a7a6a]">Resistencia - Chaco</p>
             </div>
-            <button className="px-8 py-3 bg-[#8a7a6a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#6a5a4a] transition-colors">
+            <a 
+              href="https://maps.app.goo.gl/AM8YLGbAM7johokJ6" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block px-8 py-3 bg-[#8a7a6a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#6a5a4a] transition-colors"
+            >
               Cómo llegar
-            </button>
+            </a>
           </motion.div>
 
           {/* Party */}
@@ -214,67 +251,15 @@ export default function App() {
               <Music className="text-[#8a7a6a]" size={24} />
             </div>
             <h3 className="serif text-3xl mb-4 text-[#4a3a2a]">La Fiesta</h3>
-            <p className="text-[#6a5a4a] mb-6">
-              ¡A festejar toda la noche!
+            <p className="text-[#6a5a4a] mb-8 leading-relaxed">
+              Luego de las Ceremonias, esperamos compartir a lo grande el festejo de nuestras vidas y que deseamos celebrar con ustedes.
             </p>
-            <div className="space-y-2 mb-8">
-              <p className="font-medium text-[#4a3a2a]">20:30 Horas</p>
-              <p className="text-[#8a7a6a]">Salón La Mansión</p>
-              <p className="text-sm text-[#8a7a6a]">Av. Figueroa Alcorta 2200, CABA</p>
-            </div>
-            <button className="px-8 py-3 bg-[#8a7a6a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#6a5a4a] transition-colors">
-              Cómo llegar
+            <button 
+              onClick={() => setIsPartyModalOpen(true)}
+              className="px-8 py-3 bg-[#8a7a6a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#6a5a4a] transition-colors"
+            >
+              Fiesta
             </button>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* Child-Free Section (The requested addition) */}
-      <section className="py-32 px-4 bg-white overflow-hidden">
-        <div className="max-w-5xl mx-auto flex flex-col md:flex-row items-center gap-16">
-          <motion.div 
-            initial={{ opacity: 0, x: -50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="w-full md:w-1/2 relative"
-          >
-            <div className="aspect-[4/5] rounded-[100px] overflow-hidden shadow-2xl">
-              <img 
-                src="https://images.unsplash.com/photo-1511795409834-ef04bbd61622?auto=format&fit=crop&q=80&w=1000" 
-                alt="Elegant celebration"
-                className="w-full h-full object-cover"
-                referrerPolicy="no-referrer"
-              />
-            </div>
-            <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-[#fdfcfb] rounded-full border border-[#f0ebe6] flex items-center justify-center">
-              <GlassWater className="text-[#e6d5c3]" size={48} strokeWidth={1} />
-            </div>
-          </motion.div>
-
-          <motion.div 
-            initial={{ opacity: 0, x: 50 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="w-full md:w-1/2 text-left"
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#f9f7f5] text-[#8a7a6a] text-xs uppercase tracking-widest mb-6">
-              <Info size={14} />
-              <span>Nota Especial</span>
-            </div>
-            <h2 className="serif text-4xl md:text-5xl mb-8 text-[#4a3a2a] leading-tight">
-              Una Noche para <br /> <span className="italic">Celebrar como Adultos</span>
-            </h2>
-            <div className="space-y-6 text-[#6a5a4a] leading-relaxed">
-              <p>
-                Como papás, sabemos que nuestros hijos son nuestro tesoro más grande. Sin embargo, para este día tan especial, hemos decidido organizar una <strong>celebración exclusivamente para adultos</strong>.
-              </p>
-              <p>
-                Deseamos que esta noche sea un regalo para todos: un momento de desconexión total donde podamos disfrutar plenamente de la música, el baile y el festejo sin preocupaciones. Queremos verlos disfrutar con total libertad, brindando juntos hasta el amanecer.
-              </p>
-              <p className="serif text-xl italic text-[#8a7a6a]">
-                ¡Gracias por comprender y por acompañarnos en este respiro que tanto soñamos!
-              </p>
-            </div>
           </motion.div>
         </div>
       </section>
@@ -288,6 +273,8 @@ export default function App() {
             <p className="text-[#8a7a6a] mb-2 uppercase tracking-widest text-sm font-semibold">Elegante Sport</p>
             <p className="text-sm text-[#6a5a4a]">
               ¡Queremos verte brillar! Ven cómodo pero con tu mejor estilo para celebrar y bailar.
+              <br /><br />
+              <span className="italic">Les pedimos amablemente evitar el color blanco, reservado especialmente para los novios.</span>
             </p>
           </div>
 
@@ -313,33 +300,49 @@ export default function App() {
             <p className="text-[#8a7a6a] uppercase tracking-widest text-xs">Momentos capturados antes del gran día</p>
           </div>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              className="col-span-2 row-span-2 rounded-3xl overflow-hidden aspect-square"
+          <div className="relative max-w-4xl mx-auto group">
+            <div className="aspect-[4/5] md:aspect-[16/9] rounded-3xl overflow-hidden shadow-xl bg-[#f9f7f5]">
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={currentSlide}
+                  src={slides[currentSlide]}
+                  initial={{ opacity: 0, x: 50 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -50 }}
+                  transition={{ duration: 0.5 }}
+                  className="w-full h-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </AnimatePresence>
+            </div>
+
+            {/* Navigation Buttons */}
+            <button 
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-[#8a7a6a] shadow-md hover:scale-110 transition-transform opacity-0 group-hover:opacity-100"
             >
-              <img src="https://images.unsplash.com/photo-1583939003579-730e3918a45a?auto=format&fit=crop&q=80&w=1000" alt="Pre-wedding 1" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              viewport={{ once: true }}
-              className="rounded-3xl overflow-hidden aspect-[3/4]"
+              <ChevronLeft size={24} />
+            </button>
+            <button 
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/80 backdrop-blur-sm rounded-full flex items-center justify-center text-[#8a7a6a] shadow-md hover:scale-110 transition-transform opacity-0 group-hover:opacity-100"
             >
-              <img src="https://images.unsplash.com/photo-1515934751635-c81c6bc9a2d8?auto=format&fit=crop&q=80&w=600" alt="Pre-wedding 3" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
-            </motion.div>
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              viewport={{ once: true }}
-              className="col-span-2 rounded-3xl overflow-hidden aspect-[16/9]"
-            >
-              <img src="https://images.unsplash.com/photo-1510076857177-7470076d4098?auto=format&fit=crop&q=80&w=1000" alt="Pre-wedding 4" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" referrerPolicy="no-referrer" />
-            </motion.div>
+              <ChevronRight size={24} />
+            </button>
+
+            {/* Dots */}
+            <div className="flex justify-center gap-2 mt-6">
+              {slides.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setCurrentSlide(idx)}
+                  className={cn(
+                    "w-2 h-2 rounded-full transition-all",
+                    currentSlide === idx ? "bg-[#8a7a6a] w-6" : "bg-[#e6d5c3]"
+                  )}
+                />
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -349,17 +352,17 @@ export default function App() {
         <div className="max-w-3xl mx-auto text-center">
           <h2 className="serif text-4xl md:text-5xl mb-6 text-[#4a3a2a]">Confirmación de Asistencia</h2>
           <p className="text-[#6a5a4a] mb-12">
-            Por favor, confírmanos tu presencia antes del 15 de Junio de 2026.
+            Por favor, confírmanos tu presencia antes del 10 de Junio de 2026.
           </p>
           
           <form className="space-y-6 text-left" onSubmit={(e) => e.preventDefault()}>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Nombre Completo</label>
+                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Nombres de todos los invitados</label>
                 <input 
                   type="text" 
                   className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
-                  placeholder="Tu nombre"
+                  placeholder="Nombres"
                 />
               </div>
               <div>
@@ -370,11 +373,32 @@ export default function App() {
                 </select>
               </div>
             </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Cantidad de invitados adultos</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
+                  placeholder="Ej: 2"
+                />
+              </div>
+              <div>
+                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Cantidad de invitados infantes</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
+                  placeholder="Ej: 0"
+                />
+              </div>
+            </div>
             <div>
-              <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Preferencia de bebidas</label>
+              <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Preferencia de bebidas (consulta para adultos)</label>
               <select className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb] appearance-none">
                 <option>Vino</option>
                 <option>Cerveza</option>
+                <option>Indistinto</option>
               </select>
             </div>
             <button className="w-full py-5 bg-[#4a3a2a] text-white rounded-2xl text-sm tracking-[0.2em] uppercase font-semibold hover:bg-[#2d2d2d] transition-all shadow-lg shadow-[#4a3a2a]/10">
@@ -383,6 +407,52 @@ export default function App() {
           </form>
         </div>
       </section>
+
+      {/* Fiesta Modal */}
+      <AnimatePresence>
+        {isPartyModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPartyModalOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl text-center border border-[#f0ebe6]"
+            >
+              <button 
+                onClick={() => setIsPartyModalOpen(false)}
+                className="absolute top-6 right-6 text-[#c6b5a3] hover:text-[#8a7a6a] transition-colors"
+              >
+                <X size={24} />
+              </button>
+              <div className="w-16 h-16 bg-[#fdfcfb] rounded-full flex items-center justify-center mx-auto mb-8 border border-[#f0ebe6]">
+                <Music className="text-[#8a7a6a]" size={24} />
+              </div>
+              <h3 className="serif text-3xl mb-6 text-[#4a3a2a]">La Fiesta</h3>
+              <div className="space-y-4 text-[#6a5a4a] leading-relaxed serif text-lg italic">
+                <p>
+                  Contamos que nos acompañen en este momento tan importante de nuestras vidas.
+                </p>
+                <p>
+                  Al finalizar la ceremonia, los invitamos a quedarse y celebrar con nosotros la fiesta de nuestra boda.
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsPartyModalOpen(false)}
+                className="mt-10 px-10 py-4 bg-[#4a3a2a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#2d2d2d] transition-all shadow-lg"
+              >
+                Cerrar
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="py-24 px-4 bg-[#f9f7f5] text-center">

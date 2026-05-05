@@ -14,35 +14,175 @@ import {
   Clock, 
   Info,
   ChevronDown,
-  Camera,
+  Sparkles,
   GlassWater,
   Volume2,
   VolumeX,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  CheckCircle2,
+  Users,
+  Download,
+  ArrowLeft
 } from 'lucide-react';
 import { differenceInDays, differenceInHours, differenceInMinutes, differenceInSeconds } from 'date-fns';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { collection, addDoc, serverTimestamp, getDocs, query, orderBy, where, deleteDoc, doc } from 'firebase/firestore';
+import { db, handleFirestoreError, OperationType } from './lib/firebase';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Utility for tailwind classes
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-const WEDDING_DATE = new Date('2026-07-11T18:00:00');
+const WEDDING_DATE = new Date('2026-06-13T20:30:00');
 
 export default function App() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [isPartyModalOpen, setIsPartyModalOpen] = useState(false);
+  // Admin State
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState(false);
+  const [rsvps, setRsvps] = useState<any[]>([]);
+  const [isLoadingRsvps, setIsLoadingRsvps] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const fetchRsvps = async () => {
+    setIsLoadingRsvps(true);
+    try {
+      const q = query(
+        collection(db, 'rsvps'), 
+        where('eventId', '==', 'lore-leo-boda-2026'),
+        where('clientId', '==', 'particular'),
+        orderBy('createdAt', 'desc')
+      );
+      const querySnapshot = await getDocs(q);
+      const data = querySnapshot.docs.map(doc => {
+        const docData = doc.data();
+        let dateStr = 'N/A';
+        
+        if (docData.createdAt) {
+          if (typeof docData.createdAt.toDate === 'function') {
+            dateStr = docData.createdAt.toDate().toLocaleString();
+          } else {
+            // Handle if it's already a string or other format
+            dateStr = new Date(docData.createdAt).toLocaleString();
+          }
+        }
+
+        return {
+          id: doc.id,
+          ...docData,
+          createdAt: dateStr
+        };
+      });
+      setRsvps(data);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.LIST, 'rsvps');
+    } finally {
+      setIsLoadingRsvps(false);
+    }
+  };
+
+  const handleDeleteRSVP = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await deleteDoc(doc(db, 'rsvps', id));
+      setRsvps(prev => prev.filter(rsvp => rsvp.id !== id));
+      setConfirmDeleteId(null);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `rsvps/${id}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (showAdmin) {
+      fetchRsvps();
+    }
+  }, [showAdmin]);
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    const tableColumn = ["Nombre", "Asiste", "Acompañantes", "Mensaje", "Fecha"];
+    const tableRows = rsvps.map(rsvp => [
+      rsvp.infantName,
+      rsvp.attending ? "Sí" : "No",
+      rsvp.guests,
+      rsvp.comments || "-",
+      rsvp.createdAt
+    ]);
+
+    doc.text("Listado de Invitados - Boda Lore & Leo", 14, 15);
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 20,
+    });
+    doc.save("invitados_boda_lore_leo.pdf");
+  };
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
     minutes: 0,
     seconds: 0
   });
+
+  // RSVP Form State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [formData, setFormData] = useState({
+    infantName: '',
+    attending: true,
+    guests: 0,
+    responsibleAdult: '',
+    phone: '',
+    comments: '',
+    interestedInFutureEvents: false
+  });
+
+  const handleRSVPSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const rsvpData = {
+        ...formData,
+        responsibleAdult: 'Adulto', // Default for schema compatibility
+        phone: '0000000000',      // Default for schema compatibility
+        eventId: 'lore-leo-boda-2026',
+        clientId: 'particular',
+        createdAt: serverTimestamp(),
+      };
+
+      await addDoc(collection(db, 'rsvps'), rsvpData);
+      setIsSubmitted(true);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, 'rsvps');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === '2026') {
+      setShowAdmin(true);
+      setShowLoginModal(false);
+      setLoginError(false);
+      setPasswordInput('');
+    } else {
+      setLoginError(true);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -84,7 +224,207 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#fdfcfb] selection:bg-[#e6d5c3] selection:text-[#5a4a3a]">
-      <audio id="bg-music" loop src="https://www.invitacionevento.com/primos/musica.mp3" />
+      {/* Admin Button */}
+      <button 
+        onClick={() => setShowLoginModal(true)}
+        className="fixed bottom-6 left-6 z-50 px-5 h-12 bg-[#4a3a2a] text-white rounded-full shadow-lg flex items-center justify-center gap-2 hover:scale-105 transition-transform border border-[#f0ebe6] font-semibold text-sm"
+      >
+        <Users size={18} />
+        Admin
+      </button>
+
+      {/* Admin Login Modal */}
+      <AnimatePresence>
+        {showLoginModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white p-8 rounded-3xl shadow-2xl max-w-sm w-full relative"
+            >
+              <button 
+                onClick={() => {
+                  setShowLoginModal(false);
+                  setLoginError(false);
+                  setPasswordInput('');
+                }}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 bg-[#f9f7f5] rounded-full flex items-center justify-center mx-auto mb-4">
+                  <X size={24} className="text-[#8a7a6a]" />
+                </div>
+                <h3 className="serif text-2xl text-[#3d2b1f] mb-2">Acceso Restringido</h3>
+                <p className="text-xs uppercase tracking-widest text-[#8a7a6a] font-bold">Ingresa el código para continuar</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div>
+                  <input 
+                    autoFocus
+                    type="password"
+                    value={passwordInput}
+                    onChange={(e) => {
+                      setPasswordInput(e.target.value);
+                      setLoginError(false);
+                    }}
+                    placeholder="Código de acceso"
+                    className={cn(
+                      "w-full px-6 py-4 rounded-2xl border focus:outline-none transition-all text-center text-lg tracking-[0.5em] font-bold",
+                      loginError 
+                        ? "border-red-300 bg-red-50 focus:border-red-400" 
+                        : "border-[#f0ebe6] bg-[#fdfcfb] focus:border-[#8a7a6a]"
+                    )}
+                  />
+                  {loginError && (
+                    <p className="text-red-500 text-xs text-center mt-2 font-bold uppercase tracking-tight">Código incorrecto</p>
+                  )}
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-4 bg-[#4a3a2a] text-white rounded-2xl text-sm tracking-[0.2em] uppercase font-semibold hover:bg-[#2d2d2d] transition-all shadow-lg"
+                >
+                  Entrar
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Admin Modal/Panel */}
+      <AnimatePresence>
+        {showAdmin && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-white overflow-y-auto"
+          >
+            <div className="max-w-6xl mx-auto p-6 md:p-12">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                <button 
+                  onClick={() => setShowAdmin(false)}
+                  className="flex items-center gap-2 text-[#8a7a6a] hover:text-[#4a3a2a] transition-colors"
+                >
+                  <ArrowLeft size={20} />
+                  <span className="font-semibold uppercase tracking-widest text-xs">Volver a la invitación</span>
+                </button>
+                
+                <h2 className="serif text-4xl text-[#3d2b1f]">Listado de Invitados</h2>
+                
+                <button 
+                  onClick={exportToPDF}
+                  disabled={rsvps.length === 0}
+                  className="flex items-center justify-center gap-2 px-6 py-3 bg-[#8a7a6a] text-white rounded-xl hover:bg-[#6a5a4a] transition-all shadow-md disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  <Download size={20} />
+                  <span className="font-semibold text-sm uppercase tracking-wider">Exportar PDF</span>
+                </button>
+              </div>
+
+              {isLoadingRsvps ? (
+                <div className="flex flex-col items-center justify-center py-24">
+                  <div className="w-12 h-12 border-4 border-[#e6d5c3] border-t-[#8a7a6a] rounded-full animate-spin mb-4" />
+                  <p className="text-[#8a7a6a] font-poppins">Cargando confirmaciones...</p>
+                </div>
+              ) : rsvps.length > 0 ? (
+                <div className="overflow-x-auto bg-[#fdfcfb] rounded-3xl border border-[#f0ebe6] shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-[#f9f7f5] border-bottom border-[#f0ebe6]">
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold">Invitado</th>
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold text-center">Asistirá</th>
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold text-center">Acompañantes</th>
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold">Mensaje</th>
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold">Fecha</th>
+                        <th className="px-6 py-4 text-xs uppercase tracking-widest text-[#8a7a6a] font-bold text-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#f0ebe6]">
+                      {rsvps.map((rsvp) => (
+                        <tr key={rsvp.id} className="hover:bg-white transition-colors">
+                          <td className="px-6 py-4 text-[#3d2b1f] font-medium">{rsvp.infantName}</td>
+                          <td className="px-6 py-4 text-center">
+                            {rsvp.attending ? (
+                              <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">SÍ</span>
+                            ) : (
+                              <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold">NO</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center text-[#6a5a4a]">{rsvp.guests}</td>
+                          <td className="px-6 py-4 text-[#6a5a4a] italic text-sm max-w-xs truncate" title={rsvp.comments}>
+                            {rsvp.comments || "-"}
+                          </td>
+                          <td className="px-6 py-4 text-[#8a7a6a] text-xs font-mono">{rsvp.createdAt}</td>
+                          <td className="px-6 py-4 text-center">
+                            {confirmDeleteId === rsvp.id ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleDeleteRSVP(rsvp.id)}
+                                  disabled={deletingId === rsvp.id}
+                                  className="text-xs font-bold text-red-600 hover:underline disabled:opacity-50"
+                                >
+                                  {deletingId === rsvp.id ? "..." : "Sí"}
+                                </button>
+                                <span className="text-gray-300">|</span>
+                                <button
+                                  onClick={() => setConfirmDeleteId(null)}
+                                  className="text-xs font-bold text-gray-500 hover:underline"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setConfirmDeleteId(rsvp.id)}
+                                className="text-red-400 hover:text-red-600 transition-colors"
+                                title="Eliminar invitado"
+                              >
+                                <X size={18} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  <div className="p-6 bg-[#f9f7f5] flex justify-between items-center border-t border-[#f0ebe6]">
+                    <div className="flex gap-8">
+                      <p className="text-sm text-[#8a7a6a]">
+                        Total respuestas: <span className="font-bold text-[#4a3a2a]">{rsvps.length}</span>
+                      </p>
+                      <p className="text-sm text-[#8a7a6a]">
+                        Asistirán: <span className="font-bold text-[#4a3a2a]">{rsvps.filter(r => r.attending).length}</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-24 bg-[#fdfcfb] rounded-3xl border border-[#f0ebe6] border-dashed">
+                  <div className="w-16 h-16 bg-[#f9f7f5] rounded-full flex items-center justify-center mx-auto mb-6">
+                    <Users className="text-[#c6b5a3]" size={32} />
+                  </div>
+                  <h3 className="serif text-2xl text-[#3d2b1f] mb-2">No hay confirmaciones aún</h3>
+                  <p className="text-[#8a7a6a]">Las respuestas de los invitados aparecerán aquí.</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <audio id="bg-music" loop src="https://invitacionevento.com/primos/musica.mp3" />
       
       {/* Music Toggle Button */}
       <button 
@@ -115,7 +455,7 @@ export default function App() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="text-sm uppercase tracking-[0.3em] mb-6 text-[#8a7a6a] font-medium"
+            className="text-sm uppercase tracking-[0.3em] mb-6 text-[#8a7a6a] font-poppins font-bold"
           >
             ¡Nos Casamos!
           </motion.p>
@@ -136,10 +476,10 @@ export default function App() {
             className="flex flex-col items-center"
           >
             <div className="h-px w-24 bg-[#c6b5a3] mb-6" />
-            <p className="serif text-2xl md:text-3xl text-[#5a4a3a] mb-2 italic">
-              11 de Julio de 2026
+            <p className="serif text-3xl md:text-4xl text-[#3d2b1f] mb-2 italic">
+              13 de Junio de 2026
             </p>
-            <p className="text-sm uppercase tracking-widest text-[#8a7a6a]">
+            <p className="text-sm uppercase tracking-widest text-[#8a7a6a] font-poppins font-semibold">
               Chaco, Argentina
             </p>
           </motion.div>
@@ -184,11 +524,11 @@ export default function App() {
       {/* Story / Welcome */}
       <section className="py-32 px-4 max-w-3xl mx-auto text-center">
         <Heart className="mx-auto mb-8 text-[#e6d5c3]" size={40} strokeWidth={1} />
-        <h2 className="serif text-4xl md:text-5xl mb-8 text-[#4a3a2a]">Nuestra Historia</h2>
-        <p className="serif text-xl md:text-2xl leading-relaxed text-[#5a4a3a] italic">
+        <h2 className="serif text-4xl md:text-5xl mb-8 text-[#3d2b1f]">Nuestra Historia</h2>
+        <p className="serif text-2xl md:text-3xl leading-relaxed text-[#3d2b1f] italic px-4">
           "El amor no consiste en mirarse el uno al otro, sino en mirar juntos en la misma dirección."
         </p>
-        <p className="mt-8 text-[#6a5a4a] leading-relaxed max-w-2xl mx-auto">
+        <p className="mt-10 text-[#6a5a4a] leading-relaxed max-w-2xl mx-auto font-poppins text-lg md:text-xl px-4">
           Después de tantos años compartidos, risas, viajes y sueños, de haber construido nuestro hogar juntos y ver crecer a nuestros hijos, hemos decidido dar el paso más importante de nuestras vidas. Queremos que seas parte de este nuevo comienzo y que celebremos juntos el amor que nos une.
         </p>
       </section>
@@ -196,7 +536,7 @@ export default function App() {
       {/* Video Section */}
       <section className="py-24 px-4 bg-white">
         <div className="max-w-5xl mx-auto text-center">
-          <h2 className="serif text-4xl mb-12 text-[#4a3a2a]">Un Recorrido por Nuestro Amor</h2>
+          <h2 className="serif text-4xl md:text-5xl mb-12 text-[#3d2b1f]">Nuestra historia</h2>
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             whileInView={{ opacity: 1, scale: 1 }}
@@ -223,14 +563,18 @@ export default function App() {
             <div className="w-16 h-16 bg-[#fdfcfb] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#f0ebe6]">
               <Calendar className="text-[#8a7a6a]" size={24} />
             </div>
-            <h3 className="serif text-3xl mb-4 text-[#4a3a2a]">Ceremonia</h3>
-            <p className="text-[#6a5a4a] mb-6 leading-relaxed">
-              Ambas ceremonias, Civil y Religiosa, se llevarán a cabo en:
-            </p>
-            <div className="space-y-1 mb-8">
-              <p className="font-medium text-[#4a3a2a] text-lg">Salon Amudoch</p>
-              <p className="text-[#8a7a6a]">Ruta 11 km 1001</p>
-              <p className="text-[#8a7a6a]">Resistencia - Chaco</p>
+            <h3 className="serif text-3xl md:text-4xl mb-6 text-[#3d2b1f]">Ceremonia</h3>
+            <div className="text-[#6a5a4a] mb-8 leading-relaxed space-y-6">
+              <p className="serif text-2xl md:text-3xl italic text-[#3d2b1f]">Dos “sí”, un mismo amor</p>
+              <p className="serif italic text-xl md:text-2xl">Primero firmaremos nuestra historia…luego la bendeciremos ante Dios y junto a quienes más queremos.</p>
+              <p className="serif italic text-xl md:text-2xl">- Unión Civil: 20:30 hs y al finalizar 🤍 Ceremonia Religiosa.</p>
+            </div>
+            <div className="space-y-2 mb-10">
+              <p className="serif italic text-[#8a7a6a] text-lg">📍 Todo se llevará a cabo en:</p>
+              <p className="font-poppins font-bold text-[#3d2b1f] text-xl uppercase tracking-wider">Salon Amudoch</p>
+              <p className="text-[#6a5a4a] text-lg">Ruta 11 km 1001</p>
+              <p className="text-[#6a5a4a] text-lg">Resistencia - Chaco</p>
+              <p className="mt-6 font-poppins font-bold text-[#3d2b1f] text-xl">Los esperamos 20:30 Hs</p>
             </div>
             <a 
               href="https://maps.app.goo.gl/AM8YLGbAM7johokJ6" 
@@ -250,16 +594,12 @@ export default function App() {
             <div className="w-16 h-16 bg-[#fdfcfb] rounded-full flex items-center justify-center mx-auto mb-6 border border-[#f0ebe6]">
               <Music className="text-[#8a7a6a]" size={24} />
             </div>
-            <h3 className="serif text-3xl mb-4 text-[#4a3a2a]">La Fiesta</h3>
-            <p className="text-[#6a5a4a] mb-8 leading-relaxed">
-              Luego de las Ceremonias, esperamos compartir a lo grande el festejo de nuestras vidas y que deseamos celebrar con ustedes.
+            <h3 className="serif text-3xl md:text-4xl mb-6 text-[#3d2b1f]">La Fiesta</h3>
+            <p className="serif italic text-[#6a5a4a] mb-10 leading-relaxed text-xl md:text-2xl">
+              Contamos que nos acompañen en este momento tan importante de nuestras vidas.
+              <br /><br />
+              Al finalizar las ceremonias, los invitamos a quedarse y celebrar con nosotros la fiesta de nuestra boda.
             </p>
-            <button 
-              onClick={() => setIsPartyModalOpen(true)}
-              className="px-8 py-3 bg-[#8a7a6a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#6a5a4a] transition-colors"
-            >
-              Fiesta
-            </button>
           </motion.div>
         </div>
       </section>
@@ -267,21 +607,20 @@ export default function App() {
       {/* Dress Code & Gifts */}
       <section className="py-24 px-4 bg-[#f9f7f5]">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-8">
-          <div className="bg-white p-12 rounded-3xl border border-[#f0ebe6] text-center">
-            <Camera className="mx-auto mb-6 text-[#c6b5a3]" size={32} strokeWidth={1} />
-            <h3 className="serif text-2xl mb-4 text-[#4a3a2a]">Código de Vestimenta</h3>
-            <p className="text-[#8a7a6a] mb-2 uppercase tracking-widest text-sm font-semibold">Elegante Sport</p>
-            <p className="text-sm text-[#6a5a4a]">
-              ¡Queremos verte brillar! Ven cómodo pero con tu mejor estilo para celebrar y bailar.
-              <br /><br />
-              <span className="italic">Les pedimos amablemente evitar el color blanco, reservado especialmente para los novios.</span>
-            </p>
+          <div className="bg-white p-12 md:p-16 rounded-3xl border border-[#f0ebe6] text-center shadow-sm">
+            <Sparkles className="mx-auto mb-8 text-[#c6b5a3]" size={40} strokeWidth={1} />
+            <h3 className="serif text-3xl md:text-4xl mb-6 text-[#3d2b1f]">Código de Vestimenta</h3>
+            <p className="text-[#8a7a6a] mb-4 uppercase tracking-[0.2em] text-sm font-poppins font-bold">Elegante Sport</p>
+            <div className="serif italic text-xl md:text-2xl text-[#6a5a4a] space-y-4">
+              <p>¡Queremos verte brillar! Ven cómodo pero con tu mejor estilo para celebrar y bailar.</p>
+              <p className="text-lg md:text-xl opacity-80">Les pedimos amablemente evitar el color blanco, reservado especialmente para los novios.</p>
+            </div>
           </div>
 
-          <div className="bg-white p-12 rounded-3xl border border-[#f0ebe6] text-center">
-            <Gift className="mx-auto mb-6 text-[#c6b5a3]" size={32} strokeWidth={1} />
-            <h3 className="serif text-2xl mb-4 text-[#4a3a2a]">Regalos</h3>
-            <p className="text-sm text-[#6a5a4a] mb-6">
+          <div className="bg-white p-12 md:p-16 rounded-3xl border border-[#f0ebe6] text-center shadow-sm">
+            <Gift className="mx-auto mb-8 text-[#c6b5a3]" size={40} strokeWidth={1} />
+            <h3 className="serif text-3xl md:text-4xl mb-6 text-[#3d2b1f]">Regalos</h3>
+            <p className="serif italic text-xl md:text-2xl text-[#6a5a4a] mb-10 leading-relaxed">
               Tu presencia es nuestro mejor regalo. Como ya tenemos nuestro hogar completo, si deseas obsequiarnos algo, puedes ayudarnos a cumplir nuestro sueño de la luna de miel a través de nuestra cuenta bancaria:
             </p>
             <div className="bg-[#fdfcfb] p-4 rounded-xl border border-[#f0ebe6] inline-block">
@@ -296,8 +635,8 @@ export default function App() {
       <section className="py-32 px-4 bg-white">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="serif text-4xl md:text-5xl mb-4 text-[#4a3a2a]">Nuestra Sesión Pre-Boda</h2>
-            <p className="text-[#8a7a6a] uppercase tracking-widest text-xs">Momentos capturados antes del gran día</p>
+            <h2 className="serif text-4xl md:text-5xl mb-4 text-[#3d2b1f]">Nuestra Sesión Pre-Boda</h2>
+            <p className="text-[#8a7a6a] uppercase tracking-widest text-xs font-poppins font-bold">Momentos capturados antes del gran día</p>
           </div>
           
           <div className="relative max-w-4xl mx-auto group">
@@ -348,111 +687,127 @@ export default function App() {
       </section>
 
       {/* RSVP Section */}
-      <section className="py-32 px-4 bg-white">
+      <section id="confirmacion" className="py-32 px-4 bg-white">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="serif text-4xl md:text-5xl mb-6 text-[#4a3a2a]">Confirmación de Asistencia</h2>
-          <p className="text-[#6a5a4a] mb-12">
-            Por favor, confírmanos tu presencia antes del 10 de Junio de 2026.
+          <h2 className="serif text-4xl md:text-5xl mb-8 text-[#3d2b1f]">Confirmación de Asistencia</h2>
+          <p className="text-[#6a5a4a] mb-12 text-lg md:text-xl font-poppins font-medium px-4">
+            Por favor, confírmanos tu presencia antes del 1 de Junio de 2026.
           </p>
           
-          <form className="space-y-6 text-left" onSubmit={(e) => e.preventDefault()}>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Nombres de todos los invitados</label>
-                <input 
-                  type="text" 
-                  className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
-                  placeholder="Nombres"
-                />
-              </div>
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">¿Asistirás?</label>
-                <select className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb] appearance-none">
-                  <option>Sí, ¡allí estaré!</option>
-                  <option>Lamentablemente no puedo</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Cantidad de invitados adultos</label>
-                <input 
-                  type="number" 
-                  min="1"
-                  className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
-                  placeholder="Ej: 2"
-                />
-              </div>
-              <div>
-                <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Cantidad de invitados infantes</label>
-                <input 
-                  type="number" 
-                  min="0"
-                  className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
-                  placeholder="Ej: 0"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Preferencia de bebidas (consulta para adultos)</label>
-              <select className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb] appearance-none">
-                <option>Vino</option>
-                <option>Cerveza</option>
-                <option>Indistinto</option>
-              </select>
-            </div>
-            <button className="w-full py-5 bg-[#4a3a2a] text-white rounded-2xl text-sm tracking-[0.2em] uppercase font-semibold hover:bg-[#2d2d2d] transition-all shadow-lg shadow-[#4a3a2a]/10">
-              Enviar Confirmación
-            </button>
-          </form>
+          <AnimatePresence mode="wait">
+            {!isSubmitted ? (
+              <motion.form 
+                key="rsvp-form"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="space-y-6 text-left" 
+                onSubmit={handleRSVPSubmit}
+              >
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Nombre del invitado/a</label>
+                    <input 
+                      required
+                      type="text" 
+                      id="name-input"
+                      value={formData.infantName}
+                      onChange={(e) => setFormData({ ...formData, infantName: e.target.value })}
+                      className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
+                      placeholder="Tu nombre completo"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">¿Asistirás?</label>
+                    <div className="grid grid-cols-2 gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, attending: true })}
+                        className={cn(
+                          "py-3 rounded-2xl border transition-all flex items-center justify-center gap-2 font-medium",
+                          formData.attending 
+                            ? "bg-[#e6d5c3] border-[#8a7a6a] text-[#4a3a2a]" 
+                            : "bg-white border-[#f0ebe6] text-[#8a7a6a] hover:border-[#c6b5a3]"
+                        )}
+                      >
+                        <span className="text-xl">✅</span> Sí
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, attending: false })}
+                        className={cn(
+                          "py-3 rounded-2xl border transition-all flex items-center justify-center gap-2 font-medium",
+                          !formData.attending 
+                            ? "bg-[#f8f0ea] border-[#d4a373] text-[#4a3a2a]" 
+                            : "bg-white border-[#f0ebe6] text-[#8a7a6a] hover:border-[#c6b5a3]"
+                        )}
+                      >
+                        <span className="text-xl">❌</span> No
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-1 gap-6">
+                  <div>
+                    <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Acompañantes adicionales</label>
+                    <input 
+                      type="number" 
+                      min="0"
+                      value={formData.guests}
+                      onChange={(e) => setFormData({ ...formData, guests: parseInt(e.target.value) || 0 })}
+                      className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb]"
+                      placeholder="Cantidad de personas que vienen contigo"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs uppercase tracking-widest text-[#8a7a6a] mb-2 font-semibold">Mensaje para Lore & Leo</label>
+                  <textarea 
+                    value={formData.comments}
+                    onChange={(e) => setFormData({ ...formData, comments: e.target.value })}
+                    rows={4}
+                    className="w-full px-6 py-4 rounded-2xl border border-[#f0ebe6] focus:outline-none focus:border-[#8a7a6a] transition-colors bg-[#fdfcfb] resize-none"
+                    placeholder="Escríbeles algo lindo para este momento tan especial..."
+                  />
+                </div>
+
+                <button 
+                  disabled={isSubmitting}
+                  className={cn(
+                    "w-full py-5 text-white rounded-2xl text-sm tracking-[0.2em] uppercase font-semibold transition-all shadow-lg",
+                    isSubmitting ? "bg-gray-400 cursor-not-allowed" : "bg-[#4a3a2a] hover:bg-[#2d2d2d] shadow-[#4a3a2a]/10"
+                  )}
+                >
+                  {isSubmitting ? "Enviando..." : "Enviar Confirmación"}
+                </button>
+              </motion.form>
+            ) : (
+              <motion.div 
+                key="success-message"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-[#fdfcfb] p-12 rounded-3xl border border-[#f0ebe6] shadow-sm flex flex-col items-center"
+              >
+                <div className="w-20 h-20 bg-[#f0ebe6] rounded-full flex items-center justify-center mb-6 text-[#8a7a6a]">
+                  <CheckCircle2 size={48} />
+                </div>
+                <h3 className="serif text-3xl mb-4 text-[#3d2b1f]">¡Muchas Gracias!</h3>
+                <p className="text-[#6a5a4a] text-lg font-poppins">
+                  Tu confirmación ha sido enviada con éxito. ¡Nos vemos pronto!
+                </p>
+                <button 
+                  onClick={() => setIsSubmitted(false)}
+                  className="mt-8 text-sm uppercase tracking-widest text-[#8a7a6a] hover:underline"
+                >
+                  Enviar otra respuesta
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </section>
-
-      {/* Fiesta Modal */}
-      <AnimatePresence>
-        {isPartyModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsPartyModalOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative bg-white w-full max-w-lg rounded-[40px] p-12 shadow-2xl text-center border border-[#f0ebe6]"
-            >
-              <button 
-                onClick={() => setIsPartyModalOpen(false)}
-                className="absolute top-6 right-6 text-[#c6b5a3] hover:text-[#8a7a6a] transition-colors"
-              >
-                <X size={24} />
-              </button>
-              <div className="w-16 h-16 bg-[#fdfcfb] rounded-full flex items-center justify-center mx-auto mb-8 border border-[#f0ebe6]">
-                <Music className="text-[#8a7a6a]" size={24} />
-              </div>
-              <h3 className="serif text-3xl mb-6 text-[#4a3a2a]">La Fiesta</h3>
-              <div className="space-y-4 text-[#6a5a4a] leading-relaxed serif text-lg italic">
-                <p>
-                  Contamos que nos acompañen en este momento tan importante de nuestras vidas.
-                </p>
-                <p>
-                  Al finalizar la ceremonia, los invitamos a quedarse y celebrar con nosotros la fiesta de nuestra boda.
-                </p>
-              </div>
-              <button 
-                onClick={() => setIsPartyModalOpen(false)}
-                className="mt-10 px-10 py-4 bg-[#4a3a2a] text-white rounded-full text-sm tracking-widest uppercase hover:bg-[#2d2d2d] transition-all shadow-lg"
-              >
-                Cerrar
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Footer */}
       <footer className="py-24 px-4 bg-[#f9f7f5] text-center">

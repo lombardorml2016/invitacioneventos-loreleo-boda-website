@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "RSVP": {
+      "title": "RSVP",
+      "description": "Confirmación de asistencia al evento",
+      "type": "object",
+      "properties": {
+        "infantName": { "type": "string", "description": "Nombre del invitado (niño/a)" },
+        "attending": { "type": "boolean", "description": "Si asistirá o no" },
+        "guests": { "type": "number", "description": "Cantidad de invitados adicionales" },
+        "responsibleAdult": { "type": "string", "description": "Adulto responsable (mama/papa/tutor)" },
+        "phone": { "type": "string", "description": "Teléfono de contacto" },
+        "comments": { "type": "string", "description": "Comentarios o aclaraciones" },
+        "interestedInFutureEvents": { "type": "boolean", "description": "Interés en futuros eventos" },
+        "eventId": { "type": "string", "description": "ID del evento" },
+        "clientId": { "type": "string", "description": "ID del cliente (salón)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Fecha de creación" }
+      },
+      "required": ["infantName", "attending", "guests", "responsibleAdult", "phone", "eventId", "clientId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "rsvps": {
+      "schema": "RSVP",
+      "description": "Colección de confirmaciones de asistencia"
+    }
+  }
+}

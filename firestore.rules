@@ -1,0 +1,47 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    // --- RSVP Validation ---
+    function isValidRSVP(data) {
+      return data.keys().hasAll(['infantName', 'attending', 'guests', 'responsibleAdult', 'phone', 'eventId', 'clientId', 'createdAt'])
+        && data.keys().size() >= 8 && data.keys().size() <= 10
+        && data.infantName is string && data.infantName.size() >= 2 && data.infantName.size() <= 100
+        && data.attending is bool
+        && data.guests is number && data.guests >= 0 && data.guests <= 20
+        && data.responsibleAdult is string && data.responsibleAdult.size() >= 2 && data.responsibleAdult.size() <= 100
+        && data.phone is string && data.phone.size() >= 8 && data.phone.size() <= 20
+        && data.eventId is string && data.eventId.size() <= 50
+        && data.clientId is string && data.clientId.size() <= 50
+        && data.createdAt == request.time
+        && (!data.keys().hasAny(['comments']) || (data.comments is string && data.comments.size() <= 500))
+        && (!data.keys().hasAny(['interestedInFutureEvents']) || data.interestedInFutureEvents is bool);
+    }
+
+    // --- Collection: rsvps ---
+    match /rsvps/{rsvpId} {
+      // We allow creation by anyone (public RSVP) but validate strictly
+      allow create: if isValidRSVP(incoming());
+      
+      // Allow reading and deleting for the admin list view
+      allow read, list, delete: if true; 
+    }
+  }
+}
